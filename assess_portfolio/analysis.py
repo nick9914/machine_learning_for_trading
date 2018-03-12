@@ -12,10 +12,10 @@ from util import get_data, plot_data
 
 # This is the function that will be tested by the autograder
 # The student must update this code to properly implement the functionality
-def assess_portfolio(sd = dt.datetime(2008,1,1), ed = dt.datetime(2009,1,1), \
-    syms = ['GOOG','AAPL','GLD','XOM'], \
-    allocs=[0.1,0.2,0.3,0.4], \
-    sv=1000000, rfr=0.0, sf=252.0, \
+def assess_portfolio(sd = dt.datetime(2008,1,1), ed = dt.datetime(2009,1,1),
+    syms = ['GOOG','AAPL','GLD','XOM'],
+    allocs=[0.1,0.2,0.3,0.4],
+    sv=1000000, rfr=0.0, sf=252.0,
     gen_plot=False):
 
     # Read in adjusted closing prices for given symbols, date range
@@ -26,20 +26,42 @@ def assess_portfolio(sd = dt.datetime(2008,1,1), ed = dt.datetime(2009,1,1), \
 
     # Get daily portfolio value
     port_val = prices_SPY # add code here to compute daily portfolio values
+    normalized_prices = prices / prices.iloc[0]
+    port_val_series = (normalized_prices * allocs * sv)
+    port_val = port_val_series.sum(axis=1)
 
     # Get portfolio statistics (note: std_daily_ret = volatility)
     cr, adr, sddr, sr = [0.25, 0.001, 0.0005, 2.1] # add code here to compute stats
+    #daily returns for the portfolio
+    daily_rets = port_val.copy()
+    daily_rets = (port_val / port_val.shift(1)) - 1
+    daily_rets.ix[0, 0] = 0
+
+    cr = (port_val[-1] / port_val[0]) - 1
+    adr = daily_rets.mean()
+    sddr = daily_rets.std()
+
+    sr = ((daily_rets - rfr).mean()/daily_rets.std()) * np.sqrt(sf)
 
     # Compare daily portfolio value with SPY using a normalized plot
     if gen_plot:
         # add code to plot here
-        df_temp = pd.concat([port_val, prices_SPY], keys=['Portfolio', 'SPY'], axis=1)
+        port_val_norm = port_val / port_val.iloc[0]
+        prices_SPY_norm = prices_SPY / prices_SPY.iloc[0]
+        df_temp = pd.concat([port_val_norm, prices_SPY_norm], keys=['Portfolio', 'SPY'], axis=1)
+        plot_data(df_temp)
         pass
 
     # Add code here to properly compute end value
-    ev = sv
+    ev = port_val[-1]
 
     return cr, adr, sddr, sr, ev
+
+def compute_daily_returns(df):
+    daily_returns = df.copy()
+    daily_returns[1:] = (df[1:] / df[:-1].values) - 1
+    daily_returns.ix[0, :] = 0 #set daily returns for row 0 to 0
+    return daily_returns
 
 def test_code():
     # This code WILL NOT be tested by the auto grader
@@ -57,11 +79,11 @@ def test_code():
     sample_freq = 252
 
     # Assess the portfolio
-    cr, adr, sddr, sr, ev = assess_portfolio(sd = start_date, ed = end_date,\
-        syms = symbols, \
-        allocs = allocations,\
-        sv = start_val, \
-        gen_plot = False)
+    cr, adr, sddr, sr, ev = assess_portfolio(sd = start_date, ed = end_date,
+        syms = symbols,
+        allocs = allocations,
+        sv = start_val,
+        gen_plot = True)
 
     # Print statistics
     print "Start Date:", start_date
