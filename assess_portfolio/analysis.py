@@ -24,24 +24,9 @@ def assess_portfolio(sd = dt.datetime(2008,1,1), ed = dt.datetime(2009,1,1),
     prices = prices_all[syms]  # only portfolio symbols
     prices_SPY = prices_all['SPY']  # only SPY, for comparison later
 
-    # Get daily portfolio value
-    port_val = prices_SPY # add code here to compute daily portfolio values
-    normalized_prices = prices / prices.iloc[0]
-    port_val_series = (normalized_prices * allocs * sv)
-    port_val = port_val_series.sum(axis=1)
-
     # Get portfolio statistics (note: std_daily_ret = volatility)
-    cr, adr, sddr, sr = [0.25, 0.001, 0.0005, 2.1] # add code here to compute stats
-    #daily returns for the portfolio
-    daily_rets = port_val.copy()
-    daily_rets = (port_val / port_val.shift(1)) - 1
-    daily_rets.ix[0, 0] = 0
-
-    cr = (port_val[-1] / port_val[0]) - 1
-    adr = daily_rets.mean()
-    sddr = daily_rets.std()
-
-    sr = ((daily_rets - rfr).mean()/daily_rets.std()) * np.sqrt(sf)
+    port_val = get_portfolio_value(prices, allocs, sv)
+    cr, adr, sddr, sr = compute_portfolio_stats(port_val, rfr, sf) # add code here to compute stats
 
     # Compare daily portfolio value with SPY using a normalized plot
     if gen_plot:
@@ -56,6 +41,27 @@ def assess_portfolio(sd = dt.datetime(2008,1,1), ed = dt.datetime(2009,1,1),
     ev = port_val[-1]
 
     return cr, adr, sddr, sr, ev
+
+def compute_portfolio_stats(port_val, rfr = 0.0, sf = 252.0):
+    cr = (port_val[-1] / port_val[0]) - 1
+
+    daily_rets = port_val.copy() # This is a series
+    daily_rets = (daily_rets / daily_rets.shift(1)) - 1
+    daily_rets.ix[0, 0] = 0 #set first element to zero
+
+    # average daily return - how much return on investment a stock makes on average daily
+    adr = daily_rets.mean()
+    sddr = daily_rets.std()
+
+    # sharpe ratio: average return when risk is taken into account
+    sr = ((daily_rets - rfr).mean() / daily_rets.std()) * np.sqrt(sf)
+
+    return cr, adr, sddr, sr
+
+def get_portfolio_value(prices, allocs, sv):
+    normalized_prices = prices / prices.iloc[0]
+    # determine the entire portfolio value on each day by summing all the values in a row (convert to a series)
+    return (normalized_prices * allocs * sv).sum(axis=1)
 
 def compute_daily_returns(df):
     daily_returns = df.copy()
