@@ -19,10 +19,7 @@ students of CS 7646 is prohibited and subject to being investigated as a
 GT honor code violation.  		   	  			    		  		  		    	 		 		   		 		  
   		   	  			    		  		  		    	 		 		   		 		  
 -----do not edit anything above this line---  		   	  			    		  		  		    	 		 		   		 		  
-  		   	  			    		  		  		    	 		 		   		 		  
-Student Name: Tucker Balch (replace with your name)  		   	  			    		  		  		    	 		 		   		 		  
-GT User ID: tb34 (replace with your User ID)  		   	  			    		  		  		    	 		 		   		 		  
-GT ID: 900897987 (replace with your GT ID)  		   	  			    		  		  		    	 		 		   		 		  
+
 """
 
 import pandas as pd
@@ -32,7 +29,7 @@ import os
 from util import get_data, plot_data
 
 
-def compute_portvals(orders_file="./orders/orders.csv", start_val=1000000, commission=9.95, impact=0.005):
+def compute_portvals(orders_file="./orders/orders.csv", start_val=1000000, commission=0.0, impact=0.005):
     # NOTE: orders_file may be a string, or it may be a file object. Your  		   	  			    		  		  		    	 		 		   		 		  
     # code should work correctly with either input
     df_orders = pd.read_csv(orders_file)
@@ -44,7 +41,7 @@ def compute_portvals(orders_file="./orders/orders.csv", start_val=1000000, commi
     order_symbols = df_orders['Symbol'].unique()
 
     df_prices = create_df_prices(date_range, order_symbols)
-    df_trades = create_df_trades(date_range, order_symbols, df_orders, df_prices)
+    df_trades = create_df_trades(date_range, order_symbols, df_orders, df_prices, commission, impact)
     df_holdings = create_df_holdings(date_range, order_symbols, df_trades, start_val)
     df_value = create_df_value(date_range, df_holdings, df_prices)
     portvals = create_df_portval(df_value)
@@ -52,13 +49,16 @@ def compute_portvals(orders_file="./orders/orders.csv", start_val=1000000, commi
 
     return rv
 
+
 def create_df_portval(df_value):
     # axis=0 along the rows, and axis=1 along the columns: axis='index', axis='columns'
     return df_value.sum(axis='columns')
 
+
 def create_df_value(date_range, df_holdings, df_prices):
-    #perform element wise multiplication
+    # perform element wise multiplication
     return df_holdings.multiply(df_prices)
+
 
 def create_df_holdings(date_range, order_symbols, df_trades, cash_starting_value):
     df_holdings = create_zeros_df((date_range.shape[0], len(order_symbols)), date_range, order_symbols)
@@ -76,14 +76,19 @@ def create_df_holdings(date_range, order_symbols, df_trades, cash_starting_value
     return df_holdings
 
 
-def create_df_trades(date_range, order_symbols, df_orders, df_prices):
+def create_df_trades(date_range, order_symbols, df_orders, df_prices, commission, impact):
     df_trades = create_zeros_df((date_range.shape[0], len(order_symbols)), date_range, order_symbols)
+    df_trades['Cash'] = 0.0
 
     for date_symbol, grouped_orders in df_orders.groupby(['Date', 'Symbol']):
         net_shares = get_net_shares_from_grouped_orders(grouped_orders)
         df_trades.loc[pd.to_datetime(date_symbol[0]), date_symbol[1]] = net_shares
+        #multiply by -1 because comission is a cost. Also += because we are grouping by date and symbol.
+        df_trades.loc[pd.to_datetime(date_symbol[0]), 'Cash'] -= len(grouped_orders) * commission
+        for order in grouped_orders.itertuples():
+            entry_cost_j = impact * get_price_for_trade(date_symbol[0], date_symbol[1], df_prices) * order.Shares
+            df_trades.loc[pd.to_datetime(date_symbol[0]), 'Cash'] -= entry_cost_j
 
-    df_trades['Cash'] = 0.0
 
     for trade in df_trades.itertuples():
         net_cash_for_trade = 0.0
@@ -102,7 +107,7 @@ def create_df_trades(date_range, order_symbols, df_orders, df_prices):
                 # trade quantity is zero, no need to get price to calculate diff in cash
                 continue
         #df_trades.set_value(trade.Index, 'Cash', net_cash_for_trade)
-        df_trades.at[trade.Index, 'Cash'] = net_cash_for_trade
+        df_trades.at[trade.Index, 'Cash'] += net_cash_for_trade
 
     return df_trades
 
@@ -142,12 +147,13 @@ def create_zeros_df(dimension, dates_ranges, columns):
     df.columns = columns
     return df
 
-def compute_portfolio_stats(port_val, rfr = 0.0, sf = 252.0):
+
+def compute_portfolio_stats(port_val, rfr=0.0, sf=252.0):
     cr = (port_val[-1] / port_val[0]) - 1
 
-    daily_rets = port_val.copy() # This is a series
+    daily_rets = port_val.copy()  # This is a series
     daily_rets = (daily_rets / daily_rets.shift(1)) - 1
-    daily_rets.ix[0, 0] = 0 #set first element to zero
+    daily_rets.ix[0, 0] = 0  # set first element to zero
 
     # average daily return - how much return on investment a stock makes on average daily
     adr = daily_rets.mean()
@@ -158,21 +164,25 @@ def compute_portfolio_stats(port_val, rfr = 0.0, sf = 252.0):
 
     return cr, adr, sddr, sr
 
+
 def get_spy_prices_series(date_range):
     spy_prices_df = get_data(['SPY'], date_range, False, dropNonTradingSPY=False)
     spy_prices_df_ffil = spy_prices_df.fillna(method='ffill')
     return spy_prices_df_ffil[spy_prices_df_ffil.columns[0]]
+
 
 def test_code():
     # this is a helper function you can use to test your code  		   	  			    		  		  		    	 		 		   		 		  
     # note that during autograding his function will not be called.  		   	  			    		  		  		    	 		 		   		 		  
     # Define input parameters  		   	  			    		  		  		    	 		 		   		 		  
 
-    of = "./orders/orders-04.csv"
+    of = "./orders/orders-12.csv"
     sv = 1000000
+    commission = 0.0
+    impact = 0.005
 
     # Process orders  		   	  			    		  		  		    	 		 		   		 		  
-    portvals = compute_portvals(orders_file=of, start_val=sv)
+    portvals = compute_portvals(orders_file=of, start_val=sv, commission=commission, impact=impact)
     if isinstance(portvals, pd.DataFrame):
         portvals = portvals[
             portvals.columns[0]]  # just get the first column
